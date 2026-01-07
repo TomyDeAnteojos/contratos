@@ -1,0 +1,100 @@
+:root{
+  --bg:#0b1220;
+  --card:rgba(255,255,255,.04);
+  --border:rgba(255,255,255,.12);
+  --text:#e8eefc;
+  --muted:#a6b2d3;
+  --btn:#2a72ff;
+  --btn2:#1b2a48;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:linear-gradient(180deg, #070c16, var(--bg));
+  color:var(--text);
+  font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+}
+.wrap{max-width:1100px;margin:24px auto;padding:0 16px 40px}
+.top h1{margin:0 0 6px;font-size:26px}
+.top p{margin:0;color:var(--muted)}
+.card{
+  background:var(--card);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:14px;
+  margin:14px 0;
+}
+.card h2{margin:0 0 10px;font-size:16px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.row.space{justify-content:space-between}
+.muted{color:var(--muted)}
+.hint{margin:10px 0 0;color:var(--muted)}
+.hint code{color:#d7e3ff}
+.status{
+  margin-top:10px;
+  padding:10px;
+  border-radius:12px;
+  border:1px dashed var(--border);
+  color:var(--muted);
+  white-space:pre-wrap;
+}
+.btn{
+  background:var(--btn);
+  border:1px solid rgba(255,255,255,.15);
+  color:white;
+  padding:10px 12px;
+  border-radius:12px;
+  cursor:pointer;
+  font-weight:650;
+}
+.btn.secondary{background:var(--btn2)}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.grid2{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:14px;
+}
+.grid{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap:10px;
+  margin-top:10px;
+}
+label{display:flex;flex-direction:column;gap:6px;color:var(--muted)}
+input{
+  width:100%;
+  padding:10px 10px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background:rgba(0,0,0,.25);
+  color:var(--text);
+  outline:none;
+}
+input:focus{border-color:rgba(42,114,255,.7)}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.preview{
+  background:white;
+  color:#111;
+  border-radius:12px;
+  border:1px solid rgba(0,0,0,.08);
+  padding:14px 14px;
+  height:520px;
+  overflow:auto;
+  font:12pt/1.45 "Times New Roman", Times, serif;
+}
+.preview h1{
+  margin:0 0 12px;
+  font-size:14pt;
+  text-align:center;
+  font-weight:700;
+}
+.preview h2{
+  margin:14pt 0 6pt;
+  font-size:12pt;
+}
+.preview p{margin:0 0 9pt;text-align:justify}
+.footer{margin-top:8px;text-align:center;color:var(--muted)}
+@media (max-width: 960px){
+  .grid2{grid-template-columns:1fr}
+  .preview{height:440px}
+}

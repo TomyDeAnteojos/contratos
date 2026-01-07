@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Generador de Contratos (UNPilar)</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="wrap">
+    <header class="top">
+      <h1>Generador de Contratos</h1>
+    </header>
+
+    <section class="card grid2">
+      <div>
+        <h2>Datos</h2>
+        <form id="form" class="grid" autocomplete="off">
+          <label>Apellido<input name="apellido" required></label>
+          <label>Nombre<input name="nombre" required></label>
+          <label>DNI<input name="dni" required inputmode="numeric"></label>
+
+          <label>Calle<input name="calle" required></label>
+          <label>Número<input name="numero" required></label>
+          <label>Localidad<input name="localidad" required></label>
+
+          <label>CUIT<input name="cuit" required></label>
+          <label>Domicilio<input name="domicilio" placeholder="Si lo dejas vacío, se arma con Calle + Número + Localidad"></label>
+
+          <label>Teléfono<input name="telefono" required></label>
+          <label>Email<input name="email" required type="email"></label>
+        </form>
+
+        <div class="actions">
+          <button id="btnGenerate" class="btn" type="button">Descargar Word</button>
+          <button id="btnClear" class="btn secondary" type="button">Limpiar</button>
+        </div>
+
+        <div id="mainStatus" class="status">Listo.</div>
+      </div>
+
+      <div>
+        <div class="row space">
+          <h2>Vista previa</h2>
+          <button id="btnTogglePreview" class="btn secondary" type="button">Ocultar vista previa</button>
+        </div>
+        <div class="preview" id="preview"></div>
+        <p class="hint">La vista previa es aproximada (texto + reemplazos). El Word conserva el formato de la plantilla.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Libs -->
+  <script src="https://cdn.jsdelivr.net/npm/pizzip@3.1.7/dist/pizzip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docxtemplater@3.56.0/build/docxtemplater.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+
+  <script src="app.js"></script>
+</body>
+</html>
