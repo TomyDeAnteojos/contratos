@@ -25,6 +25,13 @@
           <label>Localidad<input name="localidad" required></label>
 
           <label>CUIT<input name="cuit" required></label>
+          <label>Genero
+            <select name="genero" required>
+              <option value="">Seleccionar</option>
+              <option value="M">M</option>
+              <option value="F">F</option>
+            </select>
+          </label>
           <label>Domicilio<input name="domicilio" placeholder="Si lo dejas vacío, se arma con Calle + Número + Localidad"></label>
 
           <label>Teléfono<input name="telefono" required></label>
@@ -36,7 +43,6 @@
           <button id="btnClear" class="btn secondary" type="button">Limpiar</button>
         </div>
 
-        <div id="mainStatus" class="status">Listo.</div>
       </div>
 
       <div>

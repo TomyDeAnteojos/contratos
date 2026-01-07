@@ -69,6 +69,7 @@ function getFormData() {
     numero: coerce(raw.numero),
     localidad: coerce(raw.localidad),
     cuit: coerce(raw.cuit),
+    genero: coerce(raw.genero),
     domicilio,
     telefono: coerce(raw.telefono),
     email: coerce(raw.email),
@@ -76,13 +77,25 @@ function getFormData() {
 }
 
 function validate(raw) {
-  const required = ["apellido","nombre","dni","calle","numero","localidad","cuit","telefono","email"];
+  const required = ["apellido","nombre","dni","calle","numero","localidad","cuit","genero","telefono","email"];
   const missing = required.filter(k => !raw[k]);
   if (missing.length) throw new Error("Faltan campos obligatorios: " + missing.join(", "));
 }
 
 function buildDataObject(raw) {
   // Docxtemplater es case-sensitive. En el modelo aparecen tags como &APELLIDO& ... y en el Anexo &NOMBRE & (con espacio).
+  const genero = (raw.genero || "").toUpperCase();
+  const esMasculino = genero === "M";
+  const articulo = esMasculino ? "el" : "la";
+  const tratamiento = esMasculino ? "Sr" : "Sra";
+  const contraccion = esMasculino ? "del" : "de la";
+  const rol = esMasculino ? "PRESTADOR" : "PRESTADORA";
+  const pronombre = esMasculino ? "este" : "esta";
+  const trabajador = esMasculino ? "trabajador" : "trabajadora";
+  const autonomo = esMasculino ? "autónomo" : "autónoma";
+  const articuloIndef = esMasculino ? "un" : "una";
+  const destacado = esMasculino ? "destacado" : "destacada";
+  const contraccionA = esMasculino ? "al" : "a la";
   return {
     APELLIDO: raw.apellido,
     NOMBRE: raw.nombre,
@@ -92,17 +105,53 @@ function buildDataObject(raw) {
     NUMERO: raw.numero,
     LOCALIDAD: raw.localidad,
     CUIT: raw.cuit,
+    GENERO: articulo,
+    GENERO1: tratamiento,
+    GENERO2: contraccion,
+    GENERO3: rol,
+    GENERO4: pronombre,
+    GENERO5: trabajador,
+    GENERO6: autonomo,
+    GENERO7: articuloIndef,
+    GENERO8: destacado,
+    GENERO9: contraccionA,
     DOMICILIO: raw.domicilio,
     TELEFONO: raw.telefono,
     EMAIL: raw.email,
   };
 }
 
+
+
+
+
+
 async function loadTemplateFromFetch() {
   const res = await fetch("template.docx");
-  if (!res.ok) throw new Error("No se pudo cargar la plantilla incluida.");
-  state.templateArrayBuffer = await res.arrayBuffer();
+  if (!res.ok) throw new Error("No se pudo descargar template.docx");
+  const buffer = await res.arrayBuffer();
+  state.templateArrayBuffer = normalizeTemplate(buffer);
   setStatus(ui.templateStatus, "Plantilla incluida cargada: template.docx");
+}
+
+function normalizeTemplate(arrayBuffer) {
+  try {
+    const zip = new PizZip(arrayBuffer);
+    const path = "word/document.xml";
+    const docXml = zip.file(path)?.asText();
+    if (!docXml) return arrayBuffer;
+    const fixed = docXml
+      .replaceAll("%GENERO&amp;", "&amp;GENERO&amp;")
+      .replaceAll("%GENERO1&amp;", "&amp;GENERO1&amp;")
+      .replaceAll("%GENERO2&amp;", "&amp;GENERO2&amp;");
+    if (fixed !== docXml) {
+      zip.file(path, fixed);
+      return zip.generate({ type: "arraybuffer" });
+    }
+  } catch (err) {
+    console.error(err);
+  }
+  return arrayBuffer;
 }
 
 function assertTemplate() {
@@ -112,9 +161,30 @@ function assertTemplate() {
 }
 
 function replaceForPreview(text, dataObj) {
-  // Reemplaza tags del modelo (formato &TAG&).
+  // Reemplaza tags del modelo (formato &&TAG&&).
   // Para evitar XSS: escapamos primero texto fijo, luego insertamos valores (escapados) en <b>.
   let s = String(text)
+    .replaceAll("&&APELLIDO&&", "__APELLIDO__")
+    .replaceAll("&&NOMBRE&&", "__NOMBRE__")
+    .replaceAll("&&NOMBRE &&", "__NOMBRE__")
+    .replaceAll("&&DNI&&", "__DNI__")
+    .replaceAll("&&CALLE&&", "__CALLE__")
+    .replaceAll("&&NUMERO&&", "__NUMERO__")
+    .replaceAll("&&LOCALIDAD&&", "__LOCALIDAD__")
+    .replaceAll("&&CUIT&&", "__CUIT__")
+    .replaceAll("&&GENERO&&", "__GENERO__")
+    .replaceAll("&&GENERO1&&", "__GENERO1__")
+    .replaceAll("&&GENERO2&&", "__GENERO2__")
+    .replaceAll("&&GENERO3&&", "__GENERO3__")
+    .replaceAll("&&GENERO4&&", "__GENERO4__")
+    .replaceAll("&&GENERO5&&", "__GENERO5__")
+    .replaceAll("&&GENERO6&&", "__GENERO6__")
+    .replaceAll("&&GENERO7&&", "__GENERO7__")
+    .replaceAll("&&GENERO8&&", "__GENERO8__")
+    .replaceAll("&&GENERO9&&", "__GENERO9__")
+    .replaceAll("&&DOMICILIO&&", "__DOMICILIO__")
+    .replaceAll("&&TELEFONO&&", "__TELEFONO__")
+    .replaceAll("&&EMAIL&&", "__EMAIL__")
     .replaceAll("&APELLIDO&", "__APELLIDO__")
     .replaceAll("&NOMBRE&", "__NOMBRE__")
     .replaceAll("&NOMBRE &", "__NOMBRE__")
@@ -123,6 +193,16 @@ function replaceForPreview(text, dataObj) {
     .replaceAll("&NUMERO&", "__NUMERO__")
     .replaceAll("&LOCALIDAD&", "__LOCALIDAD__")
     .replaceAll("&CUIT&", "__CUIT__")
+    .replaceAll("&GENERO&", "__GENERO__")
+    .replaceAll("&GENERO1&", "__GENERO1__")
+    .replaceAll("&GENERO2&", "__GENERO2__")
+    .replaceAll("&GENERO3&", "__GENERO3__")
+    .replaceAll("&GENERO4&", "__GENERO4__")
+    .replaceAll("&GENERO5&", "__GENERO5__")
+    .replaceAll("&GENERO6&", "__GENERO6__")
+    .replaceAll("&GENERO7&", "__GENERO7__")
+    .replaceAll("&GENERO8&", "__GENERO8__")
+    .replaceAll("&GENERO9&", "__GENERO9__")
     .replaceAll("&DOMICILIO&", "__DOMICILIO__")
     .replaceAll("&TELEFONO&", "__TELEFONO__")
     .replaceAll("&EMAIL&", "__EMAIL__");
@@ -138,6 +218,16 @@ function replaceForPreview(text, dataObj) {
     .replaceAll("__NUMERO__", `<b>${val("NUMERO")}</b>`)
     .replaceAll("__LOCALIDAD__", `<b>${val("LOCALIDAD")}</b>`)
     .replaceAll("__CUIT__", `<b>${val("CUIT")}</b>`)
+    .replaceAll("__GENERO__", `<b>${val("GENERO")}</b>`)
+    .replaceAll("__GENERO1__", `<b>${val("GENERO1")}</b>`)
+    .replaceAll("__GENERO2__", `<b>${val("GENERO2")}</b>`)
+    .replaceAll("__GENERO3__", `<b>${val("GENERO3")}</b>`)
+    .replaceAll("__GENERO4__", `<b>${val("GENERO4")}</b>`)
+    .replaceAll("__GENERO5__", `<b>${val("GENERO5")}</b>`)
+    .replaceAll("__GENERO6__", `<b>${val("GENERO6")}</b>`)
+    .replaceAll("__GENERO7__", `<b>${val("GENERO7")}</b>`)
+    .replaceAll("__GENERO8__", `<b>${val("GENERO8")}</b>`)
+    .replaceAll("__GENERO9__", `<b>${val("GENERO9")}</b>`)
     .replaceAll("__DOMICILIO__", `<b>${val("DOMICILIO")}</b>`)
     .replaceAll("__TELEFONO__", `<b>${val("TELEFONO")}</b>`)
     .replaceAll("__EMAIL__", `<b>${val("EMAIL")}</b>`);
@@ -147,14 +237,32 @@ function renderPreview() {
   const raw = getFormData();
   const dataObj = buildDataObject(raw);
 
-  const isHeading = (s) => s && s.length <= 80 && s === s.toUpperCase();
+  const items = [
+    ["Apellido", dataObj.APELLIDO],
+    ["Nombre", dataObj.NOMBRE],
+    ["DNI", dataObj.DNI],
+    ["CUIT", dataObj.CUIT],
+    ["Domicilio", dataObj.DOMICILIO],
+    ["Telefono", dataObj.TELEFONO],
+    ["Email", dataObj.EMAIL],
+    ["Genero", raw.genero || ""],
+    ["GENERO", dataObj.GENERO],
+    ["GENERO1", dataObj.GENERO1],
+    ["GENERO2", dataObj.GENERO2],
+    ["GENERO3", dataObj.GENERO3],
+    ["GENERO4", dataObj.GENERO4],
+    ["GENERO5", dataObj.GENERO5],
+    ["GENERO6", dataObj.GENERO6],
+    ["GENERO7", dataObj.GENERO7],
+    ["GENERO8", dataObj.GENERO8],
+    ["GENERO9", dataObj.GENERO9],
+  ];
 
-  let html = `<h1>${escapeHtml(state.title)}</h1>`;
-  for (const p of state.paragraphs) {
-    const replaced = replaceForPreview(p, dataObj);
-    if (isHeading(p)) html += `<h2>${replaced}</h2>`;
-    else html += `<p>${replaced}</p>`;
+  let html = `<h2>Resumen de datos</h2><div class="preview-list">`;
+  for (const [label, value] of items) {
+    html += `<div class="preview-item"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`;
   }
+  html += `</div>`;
   ui.preview.innerHTML = html;
 }
 
@@ -191,10 +299,12 @@ async function generateWord() {
 
   const baseName = sanitizeFilename(`Contrato_${dataObj.APELLIDO}_${dataObj.NOMBRE}_${dataObj.DNI}`) || "Contrato";
   saveAs(blob, `${baseName}.docx`);
-  setMain("Listo ✅");
+  setMain("Listo.");
 }
 
 /* Eventos */
+
+
 ui.btnGenerate.addEventListener("click", async () => {
   try {
     await generateWord();
