@@ -25,6 +25,10 @@ const ui = {
   dropzone: $("#dropzone"),
 };
 
+const previewState = {
+  domicilioManual: false,
+};
+
 function setStatus(el, msg) {
   if (!el) return;
   el.textContent = msg || "";
@@ -176,30 +180,27 @@ function parseMrz(text) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
-  const line1 = lines.find((line) => line.startsWith("IDARG"));
-  if (!line1) return {};
-  const dniMatch = line1.match(/IDARG(\d{7,9})/);
+  const compactLines = lines.map((line) => line.replace(/\s+/g, "").toUpperCase());
+  const idIndex = compactLines.findIndex(
+    (line) => line.startsWith("IDARG") || line.startsWith("IDAR")
+  );
+  const idLine = idIndex >= 0 ? compactLines[idIndex] : "";
+  const dniMatch = idLine ? idLine.match(/IDAR[GQ]?(\d{7,9})/) : null;
 
-  const candidate =
-    lines.find(
-      (line) =>
-        !line.startsWith("IDARG") &&
-        /K/.test(line) &&
-        !/\d/.test(line) &&
-        line.length >= 10
-    ) ||
-    lines.find(
-      (line) =>
-        !line.startsWith("IDARG") &&
-        /[A-Z]/.test(line) &&
-        !/\d/.test(line)
-    );
+  const candidate = lines.find((line, idx) => {
+    const compact = compactLines[idx] || "";
+    if (compact.startsWith("IDAR")) return false;
+    if (!line.includes("<")) return false;
+    if (/\d/.test(compact)) return false;
+    if (!/[A-Z]/i.test(line)) return false;
+    return true;
+  });
 
   let apellido = "";
   let nombre = "";
   if (candidate) {
-    let normalized = candidate.replace(/[^A-Z<]+/g, "");
-    normalized = normalized.replace(/K+/g, "<");
+    let normalized = candidate.toUpperCase().replace(/[^A-Z<]+/g, "");
+    normalized = normalized.replace(/K+/g, "<").replace(/<+/g, "<");
     const parts = normalized.split(/<+/);
     const a = (parts[0] || "").replace(/</g, " ").trim();
     const n = parts.slice(1).join(" ").replace(/</g, " ").replace(/\s+/g, " ").trim();
@@ -271,6 +272,7 @@ function isBadNameValue(value) {
     "LOCALIDAD",
     "PROVINCIA",
     "ARGENTINA",
+    "MARG",
   ];
   if (bad.some((w) => upper.includes(w))) return true;
   if (upper.length <= 3 && (upper === "ARA" || upper === "ARG")) return true;
@@ -298,6 +300,10 @@ function parseAddressFromText(rawLines) {
     ) {
       continue;
     }
+    if (upper.includes("DOMICILIO") || upper.includes("CALLE")) {
+      const parsed = parseDomicilioLine(upper);
+      if (parsed.calle || parsed.numero || parsed.localidad) return parsed;
+    }
     const match = upper.match(/([A-Z\- ]+)\s+(\d{1,5})[.,]\s*([A-Z ]+)/);
     if (match) {
       let calle = normalizeCalle(match[1]);
@@ -308,6 +314,69 @@ function parseAddressFromText(rawLines) {
     }
   }
   return { calle: "", numero: "", localidad: "" };
+}
+
+function parseDomicilioLine(upperLine) {
+  let line = upperLine
+    .replace(/DOMICILIO\s*[:\-]?\s*/i, "")
+    .replace(/PO?MCILIO/i, "")
+    .replace(/\s+\bLUGAR DE NACIMIENTO\b.*$/i, "")
+    .trim();
+  if (!line) return { calle: "", numero: "", localidad: "" };
+  if (line.includes("CALLE")) {
+    const calleNumero = line.match(/\bCALLE\s+(\d{1,5})\b/);
+    const numero = calleNumero ? calleNumero[1] : "";
+    const localidad = line.includes("PILAR") ? "PILAR" : "";
+    return { calle: "CALLE", numero, localidad };
+  }
+  const parts = line.split(/\s*-\s*/).map((p) => p.trim()).filter(Boolean);
+  const first = parts[0] || line;
+  let calle = "";
+  let numero = "";
+  if (/^CALLE\b/.test(first)) {
+    calle = "CALLE";
+    const numMatch = first.match(/\b(\d{1,5})\b/);
+    if (numMatch) numero = numMatch[1];
+  } else {
+    const match = first.match(/^(.*?)(?:\s+(\d{1,5}[A-Z]?))\b/);
+    if (match) {
+      calle = normalizeCalle(match[1]);
+      numero = match[2];
+    }
+  }
+  let localidad = "";
+  const locCandidates = parts.slice(1);
+  const pilar = locCandidates.find((p) => p.includes("PILAR"));
+  if (pilar) {
+    localidad = "PILAR";
+  } else {
+    const candidate = locCandidates.find(
+      (p) => /[A-Z]/.test(p) && !p.includes("BUENOS AIRES")
+    );
+    localidad = candidate ? candidate.replace(/[^A-Z ]+/g, "").trim() : "";
+  }
+  return { calle, numero, localidad };
+}
+
+function pickTelefono(text, dni, cuit) {
+  const matches = String(text || "").match(/(\+?\d[\d\s().-]{6,}\d)/g) || [];
+  const clean = (value) => onlyDigits(value);
+  const dniDigits = onlyDigits(dni);
+  const cuitDigits = onlyDigits(cuit);
+  const scored = matches
+    .map((value) => {
+      const digits = clean(value);
+      return { value, digits, score: 0 };
+    })
+    .filter(({ digits }) => digits.length >= 8 && digits.length <= 15)
+    .filter(({ digits }) => digits !== dniDigits && digits !== cuitDigits)
+    .map((entry) => {
+      if (entry.value.includes("+")) entry.score += 2;
+      if (entry.digits.startsWith("54")) entry.score += 1;
+      return entry;
+    })
+    .sort((a, b) => b.score - a.score);
+  return scored[0]?.value || "";
 }
 
 function parseOcrText(text) {
@@ -371,7 +440,8 @@ function parseOcrText(text) {
     pickFirstMatch(upper, /DOCUMENTO\s*[:\-]?\s*([0-9.\s]{7,10})/) ||
     pickFirstMatch(upper, /DOC(?:UMENTO)?\s*[:\-]?\s*([0-9.\s]{7,10})/);
   const docDigits = onlyDigits(documentoLine);
-  const dni = docDigits || mrz.dni || onlyDigits(dniAlt) || extractDniFromText(upper, cuit);
+  const docDni = docDigits.length >= 7 && docDigits.length <= 9 ? docDigits : "";
+  const dni = mrz.dni || docDni || onlyDigits(dniAlt) || extractDniFromText(upper, cuit);
   if (dni && apellido && onlyDigits(apellido) === dni) apellido = "";
   if (dni && nombre && onlyDigits(nombre) === dni) nombre = "";
 
@@ -448,7 +518,7 @@ function parseOcrText(text) {
   }
 
   const email = pickEmail(rawText) || "";
-  const telefono = pickFirstMatch(rawText, /(\+?\d[\d\s().-]{6,}\d)/) || "";
+  const telefono = pickTelefono(rawText, dni, cuit) || "";
 
   if (!calle || !numero || !localidad) {
     const parsed = parseAddressFromText(rawLines);
@@ -475,9 +545,10 @@ function parseOcrText(text) {
 }
 
 const OCR_MAX_PAGES = 2;
-const OCR_SCALE_DNI = 3.0;
+const OCR_SCALE_DNI = 2.2;
 const OCR_SCALE_DEFAULT = 1.4;
 const OCR_PSM = 6;
+const OCR_DNI_SCORE_GOOD = 8;
 
 function preprocessCanvas(canvas, { strong } = {}) {
   const ctx = canvas.getContext("2d");
@@ -501,6 +572,38 @@ function preprocessCanvas(canvas, { strong } = {}) {
     data[i + 2] = v;
   }
   ctx.putImageData(img, 0, 0);
+}
+
+function rotateCanvas(source, degrees) {
+  if (degrees === 0) return source;
+  const radians = (degrees * Math.PI) / 180;
+  const target = document.createElement("canvas");
+  const ctx = target.getContext("2d");
+  const { width, height } = source;
+  if (degrees === 90 || degrees === 270) {
+    target.width = height;
+    target.height = width;
+  } else {
+    target.width = width;
+    target.height = height;
+  }
+  ctx.translate(target.width / 2, target.height / 2);
+  ctx.rotate(radians);
+  ctx.drawImage(source, -width / 2, -height / 2);
+  return target;
+}
+
+function scoreDniText(text) {
+  const upper = String(text || "").toUpperCase();
+  let score = 0;
+  if (upper.includes("APELLIDO")) score += 3;
+  if (upper.includes("NOMBRE")) score += 3;
+  if (upper.includes("DOCUMENTO")) score += 2;
+  if (upper.includes("SEXO")) score += 2;
+  if (upper.includes("IDARG") || upper.includes("IDAR")) score += 4;
+  if (/<{2,}/.test(text)) score += 2;
+  if (/\b\d{7,9}\b/.test(upper)) score += 2;
+  return score;
 }
 
 async function recognizeWithConfig(canvas, lang, config, onProgress) {
@@ -527,6 +630,16 @@ async function extractTextFromPdf(file, onProgress, { isDni } = {}) {
       console.log("[OCR] Texto extraido (PDF text layer):", file.name, "pag", pageNum);
       text += "\n" + pageText;
       if (!effectiveIsDni) continue;
+      const upper = pageText.toUpperCase();
+      const hasKeyMarkers =
+        upper.includes("IDARG") ||
+        upper.includes("APELLIDO") ||
+        upper.includes("NOMBRE") ||
+        /IDAR[GQ]?\d{7,9}/.test(upper);
+      if (hasKeyMarkers) {
+        console.log("[OCR] DNI con text layer suficiente, salteando OCR:", file.name, "pag", pageNum);
+        continue;
+      }
     }
     if (pageNum > OCR_MAX_PAGES) {
       console.log("[OCR] Saltando OCR por limite de paginas:", file.name, "pag", pageNum);
@@ -534,7 +647,10 @@ async function extractTextFromPdf(file, onProgress, { isDni } = {}) {
     }
 
     console.log("[OCR] OCR en pagina:", file.name, "pag", pageNum);
-    const viewport = page.getViewport({ scale: effectiveIsDni ? OCR_SCALE_DNI : OCR_SCALE_DEFAULT });
+    const viewport = page.getViewport({
+      scale: effectiveIsDni ? OCR_SCALE_DNI : OCR_SCALE_DEFAULT,
+      rotation: page.rotate || 0,
+    });
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d");
     context.imageSmoothingEnabled = false;
@@ -544,32 +660,61 @@ async function extractTextFromPdf(file, onProgress, { isDni } = {}) {
     await page.render({ canvasContext: context, viewport }).promise;
     preprocessCanvas(canvas, { strong: effectiveIsDni });
     const lang = effectiveIsDni ? "spa+eng" : "spa";
-    let ocrText = await recognizeWithConfig(
-      canvas,
-      lang,
-      { tessedit_pageseg_mode: OCR_PSM },
-      onProgress
-    );
+    let ocrText = "";
     if (effectiveIsDni) {
-      const digitsText = await recognizeWithConfig(
+      const rotations = [0, 90, 180, 270];
+      let bestText = "";
+      let bestScore = -1;
+      const allTexts = [];
+      for (const deg of rotations) {
+        const rotated = rotateCanvas(canvas, deg);
+        const baseText = await recognizeWithConfig(
+          rotated,
+          lang,
+          { tessedit_pageseg_mode: OCR_PSM },
+          onProgress
+        );
+        let combined = baseText;
+        let score = scoreDniText(baseText);
+        if (pageNum === 1 && score < OCR_DNI_SCORE_GOOD) {
+          const digitsText = await recognizeWithConfig(
+            rotated,
+            "eng",
+            {
+              tessedit_pageseg_mode: OCR_PSM,
+              tessedit_char_whitelist: "0123456789",
+            },
+            onProgress
+          );
+          const mrzText = await recognizeWithConfig(
+            rotated,
+            "eng",
+            {
+              tessedit_pageseg_mode: OCR_PSM,
+              tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ<0123456789",
+            },
+            onProgress
+          );
+          combined = baseText + "\n" + digitsText + "\n" + mrzText;
+          score = scoreDniText(combined);
+        }
+        allTexts.push(combined);
+        if (score > bestScore) {
+          bestScore = score;
+          bestText = combined;
+        }
+        if (bestScore >= OCR_DNI_SCORE_GOOD) {
+          break;
+        }
+      }
+      ocrText = bestScore >= 6 ? bestText : allTexts.join("\n");
+    } else {
+      ocrText = await recognizeWithConfig(
         canvas,
-        "eng",
-        {
-          tessedit_pageseg_mode: OCR_PSM,
-          tessedit_char_whitelist: "0123456789",
-        },
+        lang,
+        { tessedit_pageseg_mode: OCR_PSM },
         onProgress
       );
-      const mrzText = await recognizeWithConfig(
-        canvas,
-        "eng",
-        {
-          tessedit_pageseg_mode: OCR_PSM,
-          tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ<0123456789",
-        },
-        onProgress
-      );
-      ocrText += "\n" + digitsText + "\n" + mrzText;
     }
     console.log("[OCR] OCR listo:", file.name, "pag", pageNum);
     text += "\n" + ocrText;
@@ -822,34 +967,39 @@ function renderPreview() {
   const raw = getData();
   const dataObj = buildDataObject(raw);
 
-  const items = [
-    ["Apellido", dataObj.APELLIDO],
-    ["Nombre", dataObj.NOMBRE],
-    ["DNI", dataObj.DNI],
-    ["CUIT", dataObj.CUIT],
-    ["Calle", dataObj.CALLE],
-    ["Numero", dataObj.NUMERO],
-    ["Localidad", dataObj.LOCALIDAD],
-    ["Domicilio", dataObj.DOMICILIO],
-    ["Telefono", dataObj.TELEFONO],
-    ["Email", dataObj.EMAIL],
-    ["Genero", raw.genero || ""],
-    ["GENERO", dataObj.GENERO],
-    ["GENERO1", dataObj.GENERO1],
-    ["GENERO2", dataObj.GENERO2],
-    ["GENERO3", dataObj.GENERO3],
-    ["GENERO4", dataObj.GENERO4],
-    ["GENERO5", dataObj.GENERO5],
-    ["GENERO6", dataObj.GENERO6],
-    ["GENERO7", dataObj.GENERO7],
-    ["GENERO8", dataObj.GENERO8],
-    ["GENERO9", dataObj.GENERO9],
+  const fields = [
+    ["apellido", "Apellido", raw.apellido],
+    ["nombre", "Nombre", raw.nombre],
+    ["dni", "DNI", raw.dni],
+    ["cuit", "CUIT", raw.cuit],
+    ["calle", "Calle", raw.calle],
+    ["numero", "Numero", raw.numero],
+    ["localidad", "Localidad", raw.localidad],
+    ["domicilio", "Domicilio", raw.domicilio],
+    ["telefono", "Telefono", raw.telefono],
+    ["email", "Email", raw.email],
+    ["genero", "Genero (M/F)", raw.genero],
   ];
 
-  let html = `<h2>Resumen de datos</h2><div class="preview-list">`;
-  for (const [label, value] of items) {
-    html += `<div class="preview-item"><span>${escapeHtml(label)}</span><b>${escapeHtml(value)}</b></div>`;
+  let html = `<h2>Resumen de datos</h2>`;
+  html += `<div class="preview-list">`;
+  for (const [key, label, value] of fields) {
+    html += `<label class="preview-item preview-input"><span>${escapeHtml(label)}</span><input data-field="${escapeHtml(
+      key
+    )}" value="${escapeHtml(value)}" /></label>`;
   }
+  html += `</div>`;
+  html += `<div class="preview-list preview-derived">`;
+  html += `<div class="preview-item"><span>GENERO</span><b data-out="GENERO">${escapeHtml(dataObj.GENERO)}</b></div>`;
+  html += `<div class="preview-item"><span>GENERO1</span><b data-out="GENERO1">${escapeHtml(dataObj.GENERO1)}</b></div>`;
+  html += `<div class="preview-item"><span>GENERO2</span><b data-out="GENERO2">${escapeHtml(dataObj.GENERO2)}</b></div>`;
+  html += `<div class="preview-item"><span>GENERO3</span><b data-out="GENERO3">${escapeHtml(dataObj.GENERO3)}</b></div>`;
+  html += `<div class="preview-item"><span>GENERO4</span><b data-out="GENERO4">${escapeHtml(dataObj.GENERO4)}</b></div>`;
+  html += `<div class="preview-item"><span>GENERO5</span><b data-out="GENERO5">${escapeHtml(dataObj.GENERO5)}</b></div>`;
+  html += `<div class="preview-item"><span>GENERO6</span><b data-out="GENERO6">${escapeHtml(dataObj.GENERO6)}</b></div>`;
+  html += `<div class="preview-item"><span>GENERO7</span><b data-out="GENERO7">${escapeHtml(dataObj.GENERO7)}</b></div>`;
+  html += `<div class="preview-item"><span>GENERO8</span><b data-out="GENERO8">${escapeHtml(dataObj.GENERO8)}</b></div>`;
+  html += `<div class="preview-item"><span>GENERO9</span><b data-out="GENERO9">${escapeHtml(dataObj.GENERO9)}</b></div>`;
   html += `</div>`;
   ui.preview.innerHTML = html;
 }
@@ -966,6 +1116,37 @@ ui.btnClear.addEventListener("click", () => {
 
 ui.btnTogglePreview?.addEventListener("click", () => {
   setPreviewVisible(!previewVisible);
+});
+
+ui.preview?.addEventListener("input", (event) => {
+  const target = event.target;
+  if (!target || !target.matches("input[data-field]")) return;
+  const key = target.getAttribute("data-field");
+  const value = target.value || "";
+  const current = getData();
+  if (key === "domicilio") {
+    previewState.domicilioManual = true;
+  }
+  current[key] = value;
+  if (key === "calle" || key === "numero" || key === "localidad") {
+    if (!previewState.domicilioManual) {
+      current.domicilio = buildDomicilio(current.calle, current.numero, current.localidad);
+      const domInput = ui.preview.querySelector('input[data-field="domicilio"]');
+      if (domInput) domInput.value = current.domicilio;
+    }
+  }
+  setData(current);
+  const dataObj = buildDataObject(current);
+  ui.preview.querySelector('[data-out="GENERO"]')?.replaceChildren(document.createTextNode(dataObj.GENERO));
+  ui.preview.querySelector('[data-out="GENERO1"]')?.replaceChildren(document.createTextNode(dataObj.GENERO1));
+  ui.preview.querySelector('[data-out="GENERO2"]')?.replaceChildren(document.createTextNode(dataObj.GENERO2));
+  ui.preview.querySelector('[data-out="GENERO3"]')?.replaceChildren(document.createTextNode(dataObj.GENERO3));
+  ui.preview.querySelector('[data-out="GENERO4"]')?.replaceChildren(document.createTextNode(dataObj.GENERO4));
+  ui.preview.querySelector('[data-out="GENERO5"]')?.replaceChildren(document.createTextNode(dataObj.GENERO5));
+  ui.preview.querySelector('[data-out="GENERO6"]')?.replaceChildren(document.createTextNode(dataObj.GENERO6));
+  ui.preview.querySelector('[data-out="GENERO7"]')?.replaceChildren(document.createTextNode(dataObj.GENERO7));
+  ui.preview.querySelector('[data-out="GENERO8"]')?.replaceChildren(document.createTextNode(dataObj.GENERO8));
+  ui.preview.querySelector('[data-out="GENERO9"]')?.replaceChildren(document.createTextNode(dataObj.GENERO9));
 });
 
 async function init() {
