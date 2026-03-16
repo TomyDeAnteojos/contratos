@@ -1,66 +1,58 @@
-<!doctype html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Generador de Contratos (UNPilar)</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contratos Automáticos</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js" defer></script>
+  <script src="script.js" defer></script>
 </head>
 <body>
-  <main class="wrap">
-    <header class="top">
-      <h1>Generador de Contratos</h1>
+  <main class="app">
+    <header class="hero">
+      <p class="eyebrow">Generador inteligente</p>
+      <h1>Contratos a medida desde Excel</h1>
+      <p class="lede">Sube tu planilla con los datos básicos y obtén un archivo ZIP con los contratos listos según el tipo de trabajo.</p>
     </header>
 
-    <section class="card grid2">
-      <div>
-        <h2>Carga de PDFs</h2>
-        <label class="dropzone" id="dropzone">
-          <input id="pdfFiles" type="file" accept="application/pdf" multiple />
-          <div class="dropzone-inner">
-            <div class="dropzone-icon" aria-hidden="true">^</div>
-            <div class="dropzone-title">Solta tus PDFs aqui</div>
-            <div class="dropzone-sub">Arrastra y solta o hace click para seleccionar</div>
-            <div class="dropzone-note">DNI (frente/dorso), CUIL y CV</div>
-          </div>
+    <section class="grid">
+      <article class="card">
+        <h2>Archivo de datos</h2>
+        <label class="file-uploader" for="excel-input">
+          <input type="file" id="excel-input" accept=".xlsx,.xls,.csv">
+          <span>Arrastra o selecciona el Excel</span>
+          <small>Columnas esperadas: APELLIDO, NOMBRE, SEXO, DNI, CUIT, CALLE, LOCALIDAD, MAIL, TELEFONO, PESOS, INICIO, FIN, OBJETIVO, TIPO_CONTRATO, FORMA_PAGO, TRABAJO</small>
         </label>
-        <div class="actions">
-          <button id="btnClear" class="btn secondary" type="button">Limpiar</button>
-        </div>
-        <div class="progress">
-          <div id="ocrProgress" class="progress-bar" style="width:0%"></div>
-        </div>
-        <div id="ocrStatus" class="status">Esperando archivos PDF...</div>
-        <details class="ocr-details">
-          <summary>Ver texto OCR</summary>
-          <textarea id="ocrText" class="ocr-text" readonly></textarea>
-        </details>
+        <button id="download-button" class="primary" disabled>Descargar ZIP</button>
+        <p id="status" class="status-text">Esperando Excel válido...</p>
+      </article>
 
-        <div class="actions">
-          <button id="btnGenerate" class="btn" type="button">Descargar Word</button>
+      <article class="card preview">
+        <div class="preview-header">
+          <div>
+            <h2>Vista preliminar</h2>
+            <p class="muted">Reemplazos listos para el registro seleccionado.</p>
+          </div>
+          <select id="preview-selector" aria-label="Seleccionar fila"></select>
         </div>
-
-        <p class="hint">Subi el DNI argentino (frente/dorso), CUIL y CV. Se procesa automaticamente al cargar.</p>
-      </div>
-
-      <div>
-        <div class="row space">
-          <h2>Vista previa</h2>
-          <button id="btnTogglePreview" class="btn secondary" type="button">Ocultar vista previa</button>
+        <div class="table-wrapper">
+          <table id="preview-table">
+            <thead>
+              <tr><th>Marcador</th><th>Valor</th></tr>
+            </thead>
+            <tbody>
+              <tr><td colspan="2" class="muted">Carga un Excel para ver valores.</td></tr>
+            </tbody>
+          </table>
         </div>
-        <div class="preview" id="preview"></div>
-        <p class="hint">La vista previa es aproximada (texto + reemplazos). El Word conserva el formato de la plantilla.</p>
-      </div>
+      </article>
     </section>
   </main>
-
-  <!-- Libs -->
-  <script src="https://cdn.jsdelivr.net/npm/pizzip@3.1.7/dist/pizzip.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/docxtemplater@3.56.0/build/docxtemplater.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.5/dist/tesseract.min.js"></script>
-
-  <script src="app.js"></script>
 </body>
 </html>
